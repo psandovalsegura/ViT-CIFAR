@@ -44,7 +44,7 @@ parser.add_argument("--hidden", default=384, type=int)
 parser.add_argument("--mlp-hidden", default=384, type=int)
 parser.add_argument("--off-cls-token", action="store_true")
 parser.add_argument("--seed", default=42, type=int)
-parser.add_argument("--project-name", default="VisionTransformer")
+parser.add_argument("--project-name", default="ViT-CIFAR")
 args = parser.parse_args()
 torch.manual_seed(args.seed)
 np.random.seed(args.seed)
@@ -110,7 +110,7 @@ class Net(pl.LightningModule):
         return loss
 
     def training_epoch_end(self, outputs):
-        self.log("lr", self.optimizer.param_groups[0]["lr"], on_epoch=self.current_epoch)
+        self.log("lr", self.optimizer.param_groups[0]["lr"])
 
     def validation_step(self, batch, batch_idx):
         img, label = batch
@@ -138,19 +138,17 @@ if __name__ == "__main__":
             project_name=args.project_name,
             experiment_name=experiment_name
         )
-        refresh_rate = 0
     else:
         print("[INFO] Log with CSV")
         logger = pl.loggers.CSVLogger(
             save_dir="logs",
             name=experiment_name
         )
-        refresh_rate = 1
     net = Net(args)
-    trainer = pl.Trainer(precision=args.precision,fast_dev_run=args.dry_run, gpus=args.gpus, benchmark=args.benchmark, logger=logger, max_epochs=args.max_epochs, weights_summary="full", progress_bar_refresh_rate=refresh_rate)
-    trainer.fit(model=net, train_dataloader=train_dl, val_dataloaders=test_dl)
+    trainer = pl.Trainer(precision=args.precision, fast_dev_run=args.dry_run, benchmark=args.benchmark, logger=logger, max_epochs=args.max_epochs, accelerator="gpu", devices=args.gpus, strategy="ddp", enable_progress_bar=False)
+    trainer.fit(model=net, train_dataloaders=train_dl, val_dataloaders=test_dl)
     if not args.dry_run:
-        model_path = f"weights/{experiment_name}.pth"
+        model_path = f"/fs/vulcan-projects/stereo-detection/poisoning-defenses/ViT-CIFAR-logs/{experiment_name}.pth"
         torch.save(net.state_dict(), model_path)
         if args.api_key:
             logger.experiment.log_asset(file_name=experiment_name, file_data=model_path)
